@@ -18,6 +18,34 @@ def img_to_sig(arr):
             count += 1
     return sig
 
+# takes in array of pixel values for the reference image and array of pixel values for the uncategorized image
+# returns True if the two images have similar white pixel: total pixel ratios, False otherwise
+def histogram_match(ref_img, uncategorized_img, cutoff_score):
+    ref_white_pixels = 0 # keep track of the # of white pixels in the reference image; no white pixels to start
+    uncategorized_white_pixels = 0 # keep track of the # of white pixels in the reference image; no white pixels to start
+    total_pixels = 0 # total number of pixels in the image
+    for row in ref_img:
+        for value in row:
+            if float(value) == 1.0:
+                ref_white_pixels += 1
+            total_pixels += 1
+    for row in uncategorized_img:
+        for value in row:
+            if float(value) == 1.0:
+                uncategorized_white_pixels += 1
+    ref_white_ratio = float(ref_white_pixels) / float(total_pixels) # ratio of white pixels to total pixels in reference image
+    uncategorized_white_ratio = float(uncategorized_white_pixels) / float(total_pixels) # ratio of white pixels to total pixels in uncategorized image
+
+    print("ref_white_ratio: " + str(ref_white_ratio))
+    print("uncategorized_white_ratio: " + str(uncategorized_white_ratio))
+
+    if (abs(ref_white_ratio - uncategorized_white_ratio) < cutoff_score):
+        # the ratios of white pixel: total pixel in the two images are very similar
+        return True
+    else:
+        # the histograms of the two images do not match
+        return False
+
 
 def main():
     # Program usage: python3 emd.py (image folder name) (image 1 number) (image 2 number) (x-resolution) (y-resolution)
@@ -64,6 +92,12 @@ def main():
     reference_img = reference_img / 255 # change from [0, 255] to [0, 1] values; each white pixel has weight = 1
     uncategorized_img = uncategorized_img / 255 # change from [0, 255] to [0, 1] values
 
+    histogram_diff_cutoff = 0.05
+    # compute whether the two images have similar histograms
+    print("Histogram match result:")
+    print(histogram_match(reference_img, uncategorized_img, histogram_diff_cutoff))
+
+    # compute EMD
     # convert image matrices into numpy arrays
     arr1 = np.array(reference_img) # convert matrix into a numpy array
     arr2 = np.array(uncategorized_img) # convert matrix into a numpy array
