@@ -96,61 +96,99 @@ def same_shape(reference_img, uncategorized_img, histogram_cutoff, EMD_cutoff):
     return False # EMD scores are too high, so classify the two shapes as not the same
 
 def main():
-    # Program usage: python3 emd.py (image folder name) (image 1 number) (image 2 number) (x-resolution) (y-resolution)
     # Read in command line arguments
     num_args = len(sys.argv)
-    if num_args != 6:
+
+    if num_args < 4:
         # Error
-        print("ERROR: Program usage: python3 emd.py (image folder name) (image 1 number) (image 2 number) (x-resolution) (y-resolution)")
+        print("ERROR: Program usage: python3 emd.py (-all or -specific) (image folder name) [specific flag parameters] (x-resolution) (y-resolution)")
         return -1
 
-    folder_name = sys.argv[1] # the name of the folder within the program's directory in which all images to categorize are stored
-    reference_image = sys.argv[2] # the file number of the image in the folder to use as the reference image
-    uncategorized_image = sys.argv[3] # the file number of the image in the folder to use as the uncategorized image
-    x_res = int(sys.argv[4]) # width of image in pixels for resizing
-    y_res = int(sys.argv[5]) # height of image in pixels for resizing
+    # Determine program mode (-all or -specific)
+    # -all categorizes all images in a folder; default -all
+    # -specific determines whether two images have the same fractal shape
+    program_mode = sys.argv[1] # the program mode: either -all or -specific
+    folder_name = sys.argv[2] # the name of the folder within the program's directory in which all images to categorize are stored
 
-    # read in image files to compare
-    # will need to account for flips (can use np.fliplr(array)) to get flipped array
-    reference_img_fp = folder_name + '/frame.' + '{:0>6}'.format(reference_image) + '.ppm' # reference image filepath
-    uncategorized_img_fp = folder_name + '/frame.' + '{:0>6}'.format(uncategorized_image) + '.ppm' # uncategorized image filepath
+    if program_mode == "-specific": # compare two specific images
+        # Program usage: python3 emd.py -specific (image folder name) (image 1 number) (image 2 number) (x-resolution) (y-resolution)
+        if num_args != 7:
+            # Error
+            print("ERROR: Program usage: python3 emd.py (program mode) (image folder name) (image 1 number) (image 2 number) (x-resolution) (y-resolution)")
+            return -1
 
-    assert os.path.isfile(reference_img_fp), 'file \'{0}\' does not exist'.format(reference_img_fp) # make sure reference image exists at the filepath specified
-    assert os.path.isfile(uncategorized_img_fp), 'file \'{0}\' does not exist'.format(uncategorized_img_fp) # make sure the uncategorized image exists at the filepath specified
-    reference_img = cv2.resize(cv2.imread(reference_img_fp, cv2.IMREAD_GRAYSCALE), (x_res, y_res)) # read reference image as an array of grayscale values so only getting one value per pixel instead of values for three color channels per pixel
-    uncategorized_img = cv2.resize(cv2.imread(uncategorized_img_fp, cv2.IMREAD_GRAYSCALE), (x_res, y_res)) # read uncategorized image as an array of grayscale values so only getting one value per pixel instead of values for three color channels per pixel
+        reference_image = sys.argv[3] # the file number of the image in the folder to use as the reference image
+        uncategorized_image = sys.argv[4] # the file number of the image in the folder to use as the uncategorized image
+        x_res = int(sys.argv[5]) # width of image in pixels for resizing
+        y_res = int(sys.argv[6]) # height of image in pixels for resizing
 
-    # print image sizes if they are successfully read
-    if reference_img is not None:
-        print('reference_img.size: ', reference_img.shape)
-    else:
-        print('imread({0}) -> None'.format(reference_img_fp))
+        # read in image files to compare
+        reference_img_fp = folder_name + '/frame.' + '{:0>6}'.format(reference_image) + '.ppm' # reference image filepath
+        uncategorized_img_fp = folder_name + '/frame.' + '{:0>6}'.format(uncategorized_image) + '.ppm' # uncategorized image filepath
 
-    if uncategorized_img is not None:
-        print('uncategorized_img.size: ', uncategorized_img.shape)
-    else:
-        print('imread({0}) -> None'.format(uncategorized_img_fp))
+        assert os.path.isfile(reference_img_fp), 'file \'{0}\' does not exist'.format(reference_img_fp) # make sure reference image exists at the filepath specified
+        assert os.path.isfile(uncategorized_img_fp), 'file \'{0}\' does not exist'.format(uncategorized_img_fp) # make sure the uncategorized image exists at the filepath specified
+        reference_img = cv2.resize(cv2.imread(reference_img_fp, cv2.IMREAD_GRAYSCALE), (x_res, y_res)) # read reference image as an array of grayscale values so only getting one value per pixel instead of values for three color channels per pixel
+        uncategorized_img = cv2.resize(cv2.imread(uncategorized_img_fp, cv2.IMREAD_GRAYSCALE), (x_res, y_res)) # read uncategorized image as an array of grayscale values so only getting one value per pixel instead of values for three color channels per pixel
 
-    # write out resized images for reference purposes
-    reference_img_output_fp = 'output/frame.' + '{:0>6}'.format(reference_image) + '.png' # output reference image filepath
-    uncategorized_img_output_fp = 'output/frame.' + '{:0>6}'.format(uncategorized_image) + '.png' # output uncategorized image filepath
-    cv2.imwrite(reference_img_output_fp, reference_img)
-    cv2.imwrite(uncategorized_img_output_fp, uncategorized_img)
+        # print image sizes if they are successfully read
+        if reference_img is not None:
+            print('reference_img.size: ', reference_img.shape)
+        else:
+            print('imread({0}) -> None'.format(reference_img_fp))
 
-    reference_img = reference_img / 255 # change from [0, 255] to [0, 1] values; each white pixel has weight = 1
-    uncategorized_img = uncategorized_img / 255 # change from [0, 255] to [0, 1] values
+        if uncategorized_img is not None:
+            print('uncategorized_img.size: ', uncategorized_img.shape)
+        else:
+            print('imread({0}) -> None'.format(uncategorized_img_fp))
 
-    print("reference_img")
-    print(reference_img)
+        # write out resized images for reference purposes
+        reference_img_output_fp = 'output/frame.' + '{:0>6}'.format(reference_image) + '.png' # output reference image filepath
+        uncategorized_img_output_fp = 'output/frame.' + '{:0>6}'.format(uncategorized_image) + '.png' # output uncategorized image filepath
+        cv2.imwrite(reference_img_output_fp, reference_img)
+        cv2.imwrite(uncategorized_img_output_fp, uncategorized_img)
 
-    print("uncategorized_img")
-    print(uncategorized_img)
+        reference_img = reference_img / 255 # change from [0, 255] to [0, 1] values; each white pixel has weight = 1
+        uncategorized_img = uncategorized_img / 255 # change from [0, 255] to [0, 1] values
 
-    histogram_cutoff = 0.05
-    EMD_cutoff = 1.0
-    shape_match = same_shape(reference_img, uncategorized_img, histogram_cutoff, EMD_cutoff)
-    print("Same shape results: " + str(shape_match))
+        histogram_cutoff = 0.05
+        EMD_cutoff = 1.0
+        shape_match = same_shape(reference_img, uncategorized_img, histogram_cutoff, EMD_cutoff)
+        print("Same shape results: " + str(shape_match))
 
+    else: # categorize all images
+        # Program usage: python3 emd.py -all (image folder name) (x-resolution) (y-resolution)
+        if num_args != 5:
+            # Error
+            print("ERROR: Program usage: python3 emd.py -all (image folder name) (x-resolution) (y-resolution)")
+            return -1
+        x_res = int(sys.argv[3]) # width of image in pixels for resizing
+        y_res = int(sys.argv[4]) # height of image in pixels for resizing
+        print("x_res: " + str(x_res) + ", y_res: " + str(y_res))
+
+        
+        images = {}
+        # create a hashtable storing the categorization information of every image in the folder
+        # key is the frame number and value is a dictionary {"filename": filename, "white_ratio": white pixel to total pixel ratio in image, "categorized": boolean True/False, "category_num": shape category number}
+        # iterate through every .ppm frame in the folder 
+        directory = r'{}'.format(folder_name) # read this folder for the images to categorize
+        num_frames = 0 # keep track of the number of frames in the folder to categorize
+        for filename in os.listdir(directory):
+            if filename.endswith(".ppm"):
+                print(filename)
+                file_info = {} # dictionary for every image to store the image's categorization info
+                file_info["filename"] = filename
+
+                # compute the white pixel: total pixel ratio for the frame
+                # file_info["white_ratio"] = white_ratio()
+                file_info["categorized"] = False # initialize "categorized" to false
+                file_info["category_num"] = -1 # initialize to -1 when uncategorized
+                images[num_frames] = file_info # save in overall images dictionary
+                print(images[num_frames])
+                num_frames += 1 # increment total number of frames in the folder to categorize
+            else:
+                continue
+       
 
 if __name__ == "__main__":
     main()
