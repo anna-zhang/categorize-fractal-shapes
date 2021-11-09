@@ -46,6 +46,48 @@ def histogram_match(ref_img, uncategorized_img, cutoff_score):
         # the histograms of the two images do not match
         return False
 
+# compute Earth mover's distance 
+def emd(reference_img, uncategorized_img, EMD_cutoff):
+    # convert image matrices into numpy arrays
+    arr1 = np.array(reference_img) # convert matrix into a numpy array
+    arr2 = np.array(uncategorized_img) # convert matrix into a numpy array
+
+    # convert numpy arrays of images into signatures for cv2.EMD
+    sig1 = img_to_sig(arr1) 
+    sig2 = img_to_sig(arr2)
+    print(sig1)
+    print(sig2)
+
+    # compute the amount of work required to match smaller weight distribution to larger weight distribution (have all white pixels in the image with fewer white pixels match all of the white pixels in the image with more white pixels)
+    work, _, flow = cv2.EMD(sig1, sig2, cv2.DIST_L2)
+    print("Work: " + str(work)) # output the amount of work required to transform one distribution into the other
+
+    if work > EMD_cutoff:
+        print("No match")
+        return False
+    else:
+        print("Match")
+        return True
+
+
+# takes in two image arrays, a histogram cutoff score, and an EMD cutoff score and returns whether the shapes in the two images match up
+def same_shape(reference_img, uncategorized_img, histogram_cutoff, EMD_cutoff):
+    # compute whether the two images have similar histograms
+    # if they do not, return False; don't even need to compute EMD
+    print("Histogram match result:")
+    print(histogram_match(reference_img, uncategorized_img, histogram_cutoff))
+
+    # compute EMD scores
+    # if either EMD score is lower than a cutoff score, return True (doesn't require much work to transform one distribution into the other since the shapes are very similar); else return False
+    # compute EMD between reference image and uncategorized image
+    print("EMD result between reference image and uncategorized image:")
+    print(emd(reference_img, uncategorized_img, EMD_cutoff))
+
+    # compute EMD between reference image and the uncategorized image reflected across the y-axis
+    print("EMD result between reference image and the uncategorized image reflected across the y-axis:")
+    print(emd(reference_img, np.fliplr(uncategorized_img), EMD_cutoff))
+
+    return
 
 def main():
     # Program usage: python3 emd.py (image folder name) (image 1 number) (image 2 number) (x-resolution) (y-resolution)
@@ -92,26 +134,16 @@ def main():
     reference_img = reference_img / 255 # change from [0, 255] to [0, 1] values; each white pixel has weight = 1
     uncategorized_img = uncategorized_img / 255 # change from [0, 255] to [0, 1] values
 
-    histogram_diff_cutoff = 0.05
-    # compute whether the two images have similar histograms
-    print("Histogram match result:")
-    print(histogram_match(reference_img, uncategorized_img, histogram_diff_cutoff))
+    print("reference_img")
+    print(reference_img)
 
-    # compute EMD
-    # convert image matrices into numpy arrays
-    arr1 = np.array(reference_img) # convert matrix into a numpy array
-    arr2 = np.array(uncategorized_img) # convert matrix into a numpy array
+    print("uncategorized_img")
+    print(uncategorized_img)
 
-    # convert numpy arrays of images into signatures for cv2.EMD
-    sig1 = img_to_sig(arr1) 
-    sig2 = img_to_sig(arr2)
-    print(sig1)
-    print(sig2)
-
-    # compute the amount of work required to match smaller weight distribution to larger weight distribution (have all white pixels in the image with fewer white pixels match all of the white pixels in the image with more white pixels)
-    dist, _, flow = cv2.EMD(sig1, sig2, cv2.DIST_L2)
-    print(dist) # output the amount of work required to transform one distribution into the other
-        
+    print("Same shape results:")
+    histogram_cutoff = 0.05
+    EMD_cutoff = 1.0
+    same_shape(reference_img, uncategorized_img, histogram_cutoff, EMD_cutoff)
 
 if __name__ == "__main__":
     main()
