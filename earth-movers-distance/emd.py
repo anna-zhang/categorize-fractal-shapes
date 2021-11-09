@@ -74,20 +74,26 @@ def emd(reference_img, uncategorized_img, EMD_cutoff):
 def same_shape(reference_img, uncategorized_img, histogram_cutoff, EMD_cutoff):
     # compute whether the two images have similar histograms
     # if they do not, return False; don't even need to compute EMD
-    print("Histogram match result:")
-    print(histogram_match(reference_img, uncategorized_img, histogram_cutoff))
+    similar_white_ratio = histogram_match(reference_img, uncategorized_img, histogram_cutoff) # compute whether the reference image and uncategorized image have similar pixel color values
+    print("Histogram match result: " + str(similar_white_ratio))
+    if not similar_white_ratio:
+        return False # since the number of white pixels in the two images differing significantly, they can't be the same shape
 
     # compute EMD scores
     # if either EMD score is lower than a cutoff score, return True (doesn't require much work to transform one distribution into the other since the shapes are very similar); else return False
     # compute EMD between reference image and uncategorized image
-    print("EMD result between reference image and uncategorized image:")
-    print(emd(reference_img, uncategorized_img, EMD_cutoff))
+    reference_uncategorized_match = emd(reference_img, uncategorized_img, EMD_cutoff)
+    print("EMD result between reference image and uncategorized image: " + str(reference_uncategorized_match))
+    if reference_uncategorized_match:
+        return True # not a big difference between the reference image and uncategorized image, so consider them as having the same shape
 
     # compute EMD between reference image and the uncategorized image reflected across the y-axis
-    print("EMD result between reference image and the uncategorized image reflected across the y-axis:")
-    print(emd(reference_img, np.fliplr(uncategorized_img), EMD_cutoff))
+    reference_reflected_uncategorized_match = emd(reference_img, np.fliplr(uncategorized_img), EMD_cutoff)
+    print("EMD result between reference image and the uncategorized image reflected across the y-axis: " + str(reference_reflected_uncategorized_match))
+    if reference_reflected_uncategorized_match:
+        return True # not a big difference between the reference image and the uncategorized image reflected across the y-axis, so consider them as having the same shape
 
-    return
+    return False # EMD scores are too high, so classify the two shapes as not the same
 
 def main():
     # Program usage: python3 emd.py (image folder name) (image 1 number) (image 2 number) (x-resolution) (y-resolution)
@@ -140,10 +146,11 @@ def main():
     print("uncategorized_img")
     print(uncategorized_img)
 
-    print("Same shape results:")
     histogram_cutoff = 0.05
     EMD_cutoff = 1.0
-    same_shape(reference_img, uncategorized_img, histogram_cutoff, EMD_cutoff)
+    shape_match = same_shape(reference_img, uncategorized_img, histogram_cutoff, EMD_cutoff)
+    print("Same shape results: " + str(shape_match))
+
 
 if __name__ == "__main__":
     main()
