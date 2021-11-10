@@ -18,23 +18,26 @@ def img_to_sig(arr):
             count += 1
     return sig
 
+# takes in array of pixel values for the image and returns the ratio of number of white pixels:total pixels
+def white_ratio(img):
+    white_pixels = 0 # keep track of the # of white pixels in the image; no white pixels to start
+    total_pixels = 0 # total number of pixels in the image
+
+    # iterate through pixel values
+    for row in img:
+        for value in row:
+            if float(value) == 1.0:
+                white_pixels += 1 # found a white pixel
+            total_pixels += 1 # increment total number of pixels
+
+    return float(white_pixels) / float(total_pixels) # ratio of white pixels to total pixels in image
+
+
 # takes in array of pixel values for the reference image and array of pixel values for the uncategorized image
 # returns True if the two images have similar white pixel: total pixel ratios, False otherwise
 def histogram_match(ref_img, uncategorized_img, cutoff_score):
-    ref_white_pixels = 0 # keep track of the # of white pixels in the reference image; no white pixels to start
-    uncategorized_white_pixels = 0 # keep track of the # of white pixels in the reference image; no white pixels to start
-    total_pixels = 0 # total number of pixels in the image
-    for row in ref_img:
-        for value in row:
-            if float(value) == 1.0:
-                ref_white_pixels += 1
-            total_pixels += 1
-    for row in uncategorized_img:
-        for value in row:
-            if float(value) == 1.0:
-                uncategorized_white_pixels += 1
-    ref_white_ratio = float(ref_white_pixels) / float(total_pixels) # ratio of white pixels to total pixels in reference image
-    uncategorized_white_ratio = float(uncategorized_white_pixels) / float(total_pixels) # ratio of white pixels to total pixels in uncategorized image
+    ref_white_ratio = white_ratio(ref_img) # ratio of white pixels to total pixels in reference image
+    uncategorized_white_ratio = 0 # ratio of white pixels to total pixels in uncategorized image
 
     print("ref_white_ratio: " + str(ref_white_ratio))
     print("uncategorized_white_ratio: " + str(uncategorized_white_ratio))
@@ -148,14 +151,13 @@ def main():
         cv2.imwrite(reference_img_output_fp, reference_img)
         cv2.imwrite(uncategorized_img_output_fp, uncategorized_img)
 
-        reference_img = reference_img / 255 # change from [0, 255] to [0, 1] values; each white pixel has weight = 1
-        uncategorized_img = uncategorized_img / 255 # change from [0, 255] to [0, 1] values
+        reference_img = reference_img / 255.0 # change from [0, 255] to [0, 1] pixel values; each white pixel has weight = 1
+        uncategorized_img = uncategorized_img / 255.0 # change from [0, 255] to [0, 1] pixel values
 
         histogram_cutoff = 0.05
         EMD_cutoff = 1.0
         shape_match = same_shape(reference_img, uncategorized_img, histogram_cutoff, EMD_cutoff)
         print("Same shape results: " + str(shape_match))
-
     else: # categorize all images
         # Program usage: python3 emd.py -all (image folder name) (x-resolution) (y-resolution)
         if num_args != 5:
@@ -166,7 +168,6 @@ def main():
         y_res = int(sys.argv[4]) # height of image in pixels for resizing
         print("x_res: " + str(x_res) + ", y_res: " + str(y_res))
 
-        
         images = {}
         # create a hashtable storing the categorization information of every image in the folder
         # key is the frame number and value is a dictionary {"filename": filename, "white_ratio": white pixel to total pixel ratio in image, "categorized": boolean True/False, "category_num": shape category number}
@@ -176,11 +177,23 @@ def main():
         for filename in os.listdir(directory):
             if filename.endswith(".ppm"):
                 print(filename)
+
+                # read in image file
+                img_fp = folder_name + '/' + filename # reference image filepath
+                assert os.path.isfile(img_fp), 'file \'{0}\' does not exist'.format(img_fp) # make sure  image exists at the filepath specified
+                img = cv2.resize(cv2.imread(img_fp, cv2.IMREAD_GRAYSCALE), (x_res, y_res)) # read  image as an array of grayscale values so only getting one value per pixel instead of values for three color channels per pixel
+               
+                # print image sizes if they are successfully read
+                if img is not None:
+                    print('reference_img.size: ', img.shape)
+                else:
+                    print('imread({0}) -> None'.format(img_fp))
+
+                img = img / 255.0 # change from [0, 255] to [0, 1] pixel values; each white pixel has weight = 1
+
                 file_info = {} # dictionary for every image to store the image's categorization info
                 file_info["filename"] = filename
-
-                # compute the white pixel: total pixel ratio for the frame
-                # file_info["white_ratio"] = white_ratio()
+                file_info["white_ratio"] = white_ratio(img) # compute the white pixel:total pixel ratio for the frame
                 file_info["categorized"] = False # initialize "categorized" to false
                 file_info["category_num"] = -1 # initialize to -1 when uncategorized
                 images[num_frames] = file_info # save in overall images dictionary
@@ -188,7 +201,7 @@ def main():
                 num_frames += 1 # increment total number of frames in the folder to categorize
             else:
                 continue
-       
+
 
 if __name__ == "__main__":
     main()
