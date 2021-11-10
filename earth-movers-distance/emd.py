@@ -113,12 +113,13 @@ def main():
 
     if num_args < 4:
         # Error
-        print("ERROR: Program usage: python3 emd.py (-all or -specific) (image folder name) [specific flag parameters] (x-resolution) (y-resolution)")
+        print("ERROR: Program usage: python3 emd.py (-all, -one, or -specific) (image folder name) [specific flag parameters] (x-resolution) (y-resolution)")
         return -1
 
-    # Determine program mode (-all or -specific)
+    # Determine program mode (-all, -one, or -specific)
     # -all categorizes all images in a folder; default -all
     # -specific determines whether two images have the same fractal shape
+    # -one finds all images that have the same shape as the reference image
     program_mode = sys.argv[1] # the program mode: either -all or -specific
     folder_name = sys.argv[2] # the name of the folder within the program's directory in which all images to categorize are stored
     histogram_cutoff = 0.009 # histogram difference cutoff
@@ -167,6 +168,51 @@ def main():
 
         shape_match = same_shape(reference_img, uncategorized_img, histogram_cutoff, EMD_cutoff)
         print("Same shape results: " + str(shape_match))
+
+    elif program_mode == "-one": # 
+        # Program usage: python3 emd.py -one (image folder name) (image to use as reference) (x-resolution) (y-resolution)
+        if num_args != 6:
+            # Error
+            print("ERROR: Program usage: python3 emd.py -one (image folder name) (image to use as reference) (x-resolution) (y-resolution)")
+            return -1
+        x_res = int(sys.argv[4]) # width of image in pixels for resizing
+        y_res = int(sys.argv[5]) # height of image in pixels for resizing
+        print("x_res: " + str(x_res) + ", y_res: " + str(y_res))
+
+        # read in reference image file
+        reference_image = sys.argv[3] # the file number of the image in the folder to use as the reference image
+        reference_img_fp = folder_name + '/frame.' + '{:0>6}'.format(reference_image) + '.ppm' # reference image filepath
+        assert os.path.isfile(reference_img_fp), 'file \'{0}\' does not exist'.format(reference_img_fp) # make sure reference image exists at the filepath specified
+        reference_img = cv2.resize(cv2.imread(reference_img_fp, cv2.IMREAD_GRAYSCALE), (x_res, y_res)) # read reference image as an array of grayscale values so only getting one value per pixel instead of values for three color channels per pixel
+
+        reference_img = reference_img / 255.0 # change from [0, 255] to [0, 1] pixel values; each white pixel has weight = 1
+
+        # create a new category with the reference image
+        new_category_path = r'output/category.sample' # output category folder path
+        if not os.path.exists(new_category_path):
+            os.makedirs(new_category_path)
+        reference_img_output_fp = new_category_path + '/' + 'frame.{:0>6}'.format(reference_image) + '.png'
+        cv2.imwrite(reference_img_output_fp, reference_img * 255.0) 
+
+        directory = r'{}'.format(folder_name) # read this folder for the images to look through to find the same shapes
+        for filename in os.listdir(directory):
+            if filename.endswith(".ppm") and filename != ('frame.{:0>6}'.format(reference_image) + '.ppm'):
+                print(filename)
+                # read in uncategorized image file
+                uncategorized_img_fp = folder_name + '/' + filename # uncategorized image filepath
+                assert os.path.isfile(uncategorized_img_fp), 'file \'{0}\' does not exist'.format(uncategorized_img_fp) # make sure the uncategorized image exists at the filepath specified
+                uncategorized_img = cv2.resize(cv2.imread(uncategorized_img_fp, cv2.IMREAD_GRAYSCALE), (x_res, y_res)) # read uncategorized image as an array of grayscale values so only getting one value per pixel instead of values for three color channels per pixel
+                uncategorized_img = uncategorized_img / 255.0 # change from [0, 255] to [0, 1] pixel values
+
+                # compare the shapes in the uncategorized image and the reference image
+                if (same_shape(reference_img, uncategorized_img, histogram_cutoff, EMD_cutoff)):
+                    print(str(reference_image) + " & " + str(filename) + " match")
+                    # the shapes are the same, so categorize the uncategorized image in the same group as the reference image
+                    # make a copy of the uncategorized image file to put in the shape category folder
+                    categorized_img_output_fp = new_category_path + '/' + filename[:-3] + 'png'
+                    cv2.imwrite(categorized_img_output_fp, uncategorized_img * 255.0) 
+            
+
     else: # categorize all images
         # Program usage: python3 emd.py -all (image folder name) (x-resolution) (y-resolution)
         if num_args != 5:
