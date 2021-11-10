@@ -12,11 +12,17 @@ def img_to_sig(arr):
     # cv2.EMD requires single-precision, floating-point input
     sig = np.empty((arr.size, 3), dtype=np.float32)
     count = 0
+    nonzero_value = False
     for i in range(arr.shape[0]):
         for j in range(arr.shape[1]):
             sig[count] = np.array([arr[i,j], i, j])
             count += 1
-    return sig
+            if arr[i,j] > 0:
+                nonzero_value = True # a non-zero value in the signature
+    if nonzero_value:
+        return sig
+    else:
+        return None
 
 # takes in array of pixel values for the image and returns the ratio of number of white pixels:total pixels
 def white_ratio(img):
@@ -37,7 +43,7 @@ def white_ratio(img):
 # returns True if the two images have similar white pixel: total pixel ratios, False otherwise
 def histogram_match(ref_img, uncategorized_img, cutoff_score):
     ref_white_ratio = white_ratio(ref_img) # ratio of white pixels to total pixels in reference image
-    uncategorized_white_ratio = 0 # ratio of white pixels to total pixels in uncategorized image
+    uncategorized_white_ratio = white_ratio(uncategorized_img) # ratio of white pixels to total pixels in uncategorized image
 
     print("ref_white_ratio: " + str(ref_white_ratio))
     print("uncategorized_white_ratio: " + str(uncategorized_white_ratio))
@@ -60,6 +66,9 @@ def emd(reference_img, uncategorized_img, EMD_cutoff):
     sig2 = img_to_sig(arr2)
     print(sig1)
     print(sig2)
+
+    if (sig1 is None) or (sig2 is None):
+        sys.exit("Error: signatures must contain at least one non-zero value")
 
     # compute the amount of work required to match smaller weight distribution to larger weight distribution (have all white pixels in the image with fewer white pixels match all of the white pixels in the image with more white pixels)
     work, _, flow = cv2.EMD(sig1, sig2, cv2.DIST_L2)
@@ -86,13 +95,13 @@ def same_shape(reference_img, uncategorized_img, histogram_cutoff, EMD_cutoff):
     # if either EMD score is lower than a cutoff score, return True (doesn't require much work to transform one distribution into the other since the shapes are very similar); else return False
     # compute EMD between reference image and uncategorized image
     reference_uncategorized_match = emd(reference_img, uncategorized_img, EMD_cutoff)
-    print("EMD result between reference image and uncategorized image: " + str(reference_uncategorized_match))
+    # print("EMD result between reference image and uncategorized image: " + str(reference_uncategorized_match))
     if reference_uncategorized_match:
         return True # not a big difference between the reference image and uncategorized image, so consider them as having the same shape
 
     # compute EMD between reference image and the uncategorized image reflected across the y-axis
     reference_reflected_uncategorized_match = emd(reference_img, np.fliplr(uncategorized_img), EMD_cutoff)
-    print("EMD result between reference image and the uncategorized image reflected across the y-axis: " + str(reference_reflected_uncategorized_match))
+    # print("EMD result between reference image and the uncategorized image reflected across the y-axis: " + str(reference_reflected_uncategorized_match))
     if reference_reflected_uncategorized_match:
         return True # not a big difference between the reference image and the uncategorized image reflected across the y-axis, so consider them as having the same shape
 
@@ -112,6 +121,8 @@ def main():
     # -specific determines whether two images have the same fractal shape
     program_mode = sys.argv[1] # the program mode: either -all or -specific
     folder_name = sys.argv[2] # the name of the folder within the program's directory in which all images to categorize are stored
+    histogram_cutoff = 0.009 # histogram difference cutoff
+    EMD_cutoff = 1.0 # cutoff for EMD scores; if greater than this score, then the two images have different fractal shapes
 
     if program_mode == "-specific": # compare two specific images
         # Program usage: python3 emd.py -specific (image folder name) (image 1 number) (image 2 number) (x-resolution) (y-resolution)
@@ -154,8 +165,6 @@ def main():
         reference_img = reference_img / 255.0 # change from [0, 255] to [0, 1] pixel values; each white pixel has weight = 1
         uncategorized_img = uncategorized_img / 255.0 # change from [0, 255] to [0, 1] pixel values
 
-        histogram_cutoff = 0.05
-        EMD_cutoff = 1.0
         shape_match = same_shape(reference_img, uncategorized_img, histogram_cutoff, EMD_cutoff)
         print("Same shape results: " + str(shape_match))
     else: # categorize all images
@@ -174,6 +183,7 @@ def main():
         # iterate through every .ppm frame in the folder 
         directory = r'{}'.format(folder_name) # read this folder for the images to categorize
         num_frames = 0 # keep track of the number of frames in the folder to categorize
+        num_categories = 0 # indices for categories, starting at 0
         for filename in os.listdir(directory):
             if filename.endswith(".ppm"):
                 print(filename)
@@ -194,13 +204,71 @@ def main():
                 file_info = {} # dictionary for every image to store the image's categorization info
                 file_info["filename"] = filename
                 file_info["white_ratio"] = white_ratio(img) # compute the white pixel:total pixel ratio for the frame
+                # print(file_info["white_ratio"])
                 file_info["categorized"] = False # initialize "categorized" to false
                 file_info["category_num"] = -1 # initialize to -1 when uncategorized
+
+                if file_info["white_ratio"] < 0.000005:
+                    # shapeless image
+                    new_category_path = r'output/category.' + '{:0>3}'.format(num_categories) # output category folder path
+                    if not os.path.exists(new_category_path):
+                        os.makedirs(new_category_path)
+
+                    # make a copy of the image file
+                    categorized_shapeless_output_fp = new_category_path + '/' + filename[:-3] + 'png' # copy of shapeless image categorized filepath
+                    cv2.imwrite(categorized_shapeless_output_fp, img * 255.0) 
+
+                    file_info["categorized"] = True # remember that this image has been categorized
+                    file_info["category_num"] = num_categories # remember the category this image is a part of
+                    
                 images[num_frames] = file_info # save in overall images dictionary
-                print(images[num_frames])
+                # print(images[num_frames])
                 num_frames += 1 # increment total number of frames in the folder to categorize
             else:
                 continue
+            
+        # Shape categorization
+        print("num_frames: " + str(num_frames))
+        for i in range(num_frames):
+            if images[i]["categorized"] == False: # go to the next uncategorized image and set that as the reference image for a new shape category
+                # read in reference image file
+                reference_img_fp = folder_name + '/' + images[i]["filename"] # reference image filepath
+                assert os.path.isfile(reference_img_fp), 'file \'{0}\' does not exist'.format(reference_img_fp) # make sure reference image exists at the filepath specified
+                reference_img = cv2.resize(cv2.imread(reference_img_fp, cv2.IMREAD_GRAYSCALE), (x_res, y_res)) # read reference image as an array of grayscale values so only getting one value per pixel instead of values for three color channels per pixel
+                reference_img = reference_img / 255.0 # change from [0, 255] to [0, 1] pixel values; each white pixel has weight = 1
+
+                
+                num_categories += 1 # increment the number of shape categories
+                # create new shape category with this image as reference, category name = num_categories
+                new_category_path = r'output/category.' + '{:0>3}'.format(num_categories) # output category folder path
+                if not os.path.exists(new_category_path):
+                    os.makedirs(new_category_path)
+                
+                # make a copy of the image file
+                categorized_ref_output_fp = new_category_path + '/' + 'frame.{:0>6}'.format(i) + '.png' # copy of reference image categorized filepath
+                cv2.imwrite(categorized_ref_output_fp, reference_img * 255.0) 
+
+                images[i]["categorized"] = True # remember that this image has been categorized
+                images[i]["category_num"] = num_categories # remember the category this image is a part of
+        
+                for j in range(i, num_frames): 
+                    # read in uncategorized image file
+                    uncategorized_img_fp = folder_name + '/' + images[j]["filename"] # uncategorized image filepath
+                    assert os.path.isfile(uncategorized_img_fp), 'file \'{0}\' does not exist'.format(uncategorized_img_fp) # make sure the uncategorized image exists at the filepath specified
+                    uncategorized_img = cv2.resize(cv2.imread(uncategorized_img_fp, cv2.IMREAD_GRAYSCALE), (x_res, y_res)) # read uncategorized image as an array of grayscale values so only getting one value per pixel instead of values for three color channels per pixel
+                    uncategorized_img = uncategorized_img / 255.0 # change from [0, 255] to [0, 1] pixel values
+
+                    # compare the shapes in the two images
+                    if (same_shape(reference_img, uncategorized_img, histogram_cutoff, EMD_cutoff)):
+                        print(str(i) + " & " + str(j) + " match")
+                        # the shapes are the same, so categorize the two images together
+                        # make a copy of the image file
+                        categorized_img_output_fp = new_category_path + '/' + 'frame.{:0>6}'.format(j) + '.png'
+                        cv2.imwrite(categorized_img_output_fp, uncategorized_img * 255.0) 
+
+                        images[j]["categorized"] = True # remember that this image has been categorized
+                        images[j]["category_num"] = num_categories # save the category number the image was categorized in
+
 
 
 if __name__ == "__main__":
