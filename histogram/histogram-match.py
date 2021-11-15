@@ -4,16 +4,21 @@ import matplotlib.pyplot as plt
 import os, glob, shutil
 import sys # process command line arguments
 
-# takes in two image histograms and a histogram cutoff score, returns whether the shapes in the two images match up (whether the two images have around the same histogram)
-def same_shape(reference_hist, uncategorized_hist, histogram_cutoff):
+class MatchInfo:
+  def __init__(self, match, score):
+    self.match = match # True if the two shapes match, False if the two shapes do not match
+    self.score = score # match score between the two shapes
+
+# takes in two image histograms, a histogram cutoff score, and a histogram comparison method; returns whether the shapes in the two images match up (whether the two images have around the same histogram) and the match score as a MatchInfo object
+def same_shape(reference_hist, uncategorized_hist, histogram_cutoff, comparison_method):
     # compute whether the two images have similar histograms
     # if they do not, return False
-    match_score = cv2.compareHist(reference_hist, uncategorized_hist, cv2.HISTCMP_CORREL) # compute the histogram match score between the reference image histogram and the uncategorized image histogram
+    match_score = cv2.compareHist(reference_hist, uncategorized_hist, comparison_method) # compute the histogram match score between the reference image histogram and the uncategorized image histogram
     print("Histogram match result: " + str(match_score))
     if match_score < histogram_cutoff:
-        return False # since the histograms of the two images differing significantly, they can't be the same shape
+        return MatchInfo(False, match_score) # since the histograms of the two images differing significantly, they can't be the same shape
     else:
-        return True # since the histograms of the two images are around the same, say that they're the same shape
+        return MatchInfo(True, match_score) # since the histograms of the two images are around the same, say that they're the same shape
 
 def main():
     # Read in command line arguments
@@ -31,6 +36,19 @@ def main():
     program_mode = sys.argv[1] # the program mode: either -all or -specific
     folder_name = sys.argv[2] # the name of the folder within the program's directory in which all images to categorize are stored
     histogram_cutoff = 0.99999 # histogram difference cutoff
+    comparison_method = cv2.HISTCMP_CORREL # histogram comparison method
+
+    output_path = r'output' # output folder path
+    if not os.path.exists(output_path):
+        os.makedirs(output_path)
+    info_file = open("output/category_info.txt", 'w+') # create a text file to store categorization information
+
+    # save the command
+    info_file.write("Running: ")
+    for i in range(num_args):
+        info_file.write(sys.argv[i] + " ")
+    info_file.write("\nhistogram_cutoff: " + str(histogram_cutoff) + "\n") # remember the histogram_cutoff threshold value
+    info_file.write("\ncomparison_method: " + str(comparison_method) + "\n") # remember the comparison method for cv2.compareHist()
 
     if program_mode == "-specific": # compare two specific images
         # Program usage: python3 histogram-match.py -specific (image folder name) (image 1 number) (image 2 number) (x-resolution) (y-resolution)
@@ -73,7 +91,7 @@ def main():
         cv2.imwrite(reference_img_output_fp, reference_img)
         cv2.imwrite(uncategorized_img_output_fp, uncategorized_img)
 
-        shape_match = same_shape(reference_hist, uncategorized_hist, histogram_cutoff) # compute whether the two images have similar histograms
+        shape_match = same_shape(reference_hist, uncategorized_hist, histogram_cutoff, comparison_method).match # compute whether the two images have similar histograms
         print("Same shape results: " + str(shape_match)) # print out whether the shapes match
 
     elif program_mode == "-one": 
@@ -111,7 +129,7 @@ def main():
                 uncategorized_hist = cv2.calcHist([uncategorized_img], [0], None, [256], [0, 256]) # compute histogram of the uncategorized image
 
                 # compare the shapes in the uncategorized image and the reference image
-                if (same_shape(reference_hist, uncategorized_hist, histogram_cutoff)):
+                if (same_shape(reference_hist, uncategorized_hist, histogram_cutoff, comparison_method).match):
                     print(str(reference_image) + " & " + str(filename) + " match")
                     # the shapes are the same, so categorize the uncategorized image in the same group as the reference image
                     # make a copy of the uncategorized image file to put in the shape category folder
@@ -176,6 +194,8 @@ def main():
                 if not os.path.exists(new_category_path):
                     os.makedirs(new_category_path)
                 
+                info_file.write("\ncategory." + '{:0>3}'.format(num_categories) + "\n") # save category number in text file
+                
                 # make a copy of the image file
                 categorized_ref_output_fp = new_category_path + '/' + 'frame.{:0>6}'.format(i) + '.png' # copy of reference image categorized filepath
                 cv2.imwrite(categorized_ref_output_fp, reference_img) 
@@ -189,8 +209,10 @@ def main():
                     assert os.path.isfile(uncategorized_img_fp), 'file \'{0}\' does not exist'.format(uncategorized_img_fp) # make sure the uncategorized image exists at the filepath specified
                     uncategorized_img = cv2.resize(cv2.imread(uncategorized_img_fp, cv2.IMREAD_GRAYSCALE), (x_res, y_res)) # read uncategorized image as an array of grayscale values so only getting one value per pixel instead of values for three color channels per pixel
 
+                    shape_match = same_shape(images[i]["histogram"], images[j]["histogram"], histogram_cutoff, comparison_method) # see if the two images have similar histograms
                     # compare the shapes in the two images
-                    if (same_shape(images[i]["histogram"], images[j]["histogram"], histogram_cutoff)):
+                    if (shape_match.match):
+                        info_file.write(images[j]["filename"] + ": " + str(shape_match.score) + "\n") # save file number corresponding to the histogram match score
                         print(str(i) + " & " + str(j) + " match")
                         # the shapes are the same, so categorize the two images together
                         # make a copy of the image file
@@ -199,6 +221,10 @@ def main():
 
                         images[j]["categorized"] = True # remember that this image has been categorized
                         images[j]["category_num"] = num_categories # save the category number the image was categorized in
+        
+        info_file.write("\n Categorization results: \n") # spacer and header for summary info        
+        info_file.write(str(images))  
+    info_file.close() # close the text file
                 
 
 if __name__ == "__main__":
