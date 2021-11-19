@@ -1,0 +1,2 @@
+# Combined Approach
+This first uses histogram comparison with cv2.compareHist() to create initial shape groupings and then uses Earth Mover's Distance with cv2.EMD() within these initial groupings to create final shape categories. The histogram match threshold for the images to be initially grouped together can be specified by changing the value of histogram_cutoff, and the EMD cutoff score for final groupings can be specified by changing the value of EMD_cutoff. 
