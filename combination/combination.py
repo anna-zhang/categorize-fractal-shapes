@@ -129,9 +129,9 @@ def main():
     # -one finds all images that have the same shape as the reference image
     program_mode = sys.argv[1] # the program mode: either -all or -specific
     folder_name = sys.argv[2] # the name of the folder within the program's directory in which all images to categorize are stored
-    histogram_cutoff = 0.9999 # histogram difference cutoff
+    histogram_cutoff = 0.9997 # histogram difference cutoff
     comparison_method = cv2.HISTCMP_CORREL # histogram comparison method
-    EMD_cutoff = 1.75 # EMD work cutoff
+    EMD_cutoff = 1.80 # EMD work cutoff
     white_threshold = 0.005 # white pixel:total pixel ratio cutoff for shapeless images
 
     hist_output_path = r'hist_initial_output' # output folder path
@@ -252,9 +252,18 @@ def main():
         y_res = int(sys.argv[4]) # height of image in pixels for resizing
         print("x_res: " + str(x_res) + ", y_res: " + str(y_res))
 
-        shapeless_category_path = r'EMD_final_output/category.' + '{:0>3}'.format(0) # output category folder path for shapeless images
-        if not os.path.exists(shapeless_category_path):
-            os.makedirs(shapeless_category_path)
+        # holds the same shapeless shapes
+        EMD_shapeless_category_path = r'EMD_final_output/category.' + '{:0>3}'.format(0) # output category folder path for shapeless images
+        hist_shapeless_category_path = r'hist_initial_output/category.' + '{:0>3}'.format(0) # output category folder path for shapeless images
+
+        if not os.path.exists(EMD_shapeless_category_path):
+            os.makedirs(EMD_shapeless_category_path)
+        if not os.path.exists(hist_shapeless_category_path):
+            os.makedirs(hist_shapeless_category_path)
+
+        EMD_uncategorized_category_path = r'EMD_final_output/uncategorized' # output category folder path for a copy of all shapes that are categorized alone
+        if not os.path.exists(EMD_uncategorized_category_path):
+            os.makedirs(EMD_uncategorized_category_path)
 
         images = {} # create a hashtable storing the categorization information of every image in the folder
         # key is the frame number and value is a dictionary {"filename": filename, "histogram": the image histogram, "hist_categorized": boolean True/False for whether the image has been categorized according to histogram matching, "EMD_categorized": boolean True/False for whether the image has been categorized according to EMD, "hist_category_num": shape category number in initial histogram groupings, "error": boolean True/False for whether there are errors in categorization}
@@ -291,13 +300,19 @@ def main():
                 # shape_exists
                 if (shape_exists(img, white_threshold) == False):
                     # copy shapeless image into shapeless category
-                    categorized_output_fp = shapeless_category_path + '/' + filename[-16:-4] + '.png'
-                    cv2.imwrite(categorized_output_fp, img) 
+                    # copy into initial histogram groupings
+                    hist_categorized_output_fp = hist_shapeless_category_path + '/' + filename[-16:-4] + '.png'
+                    cv2.imwrite(hist_categorized_output_fp, img) 
+                    
+                    # copy into EMD groupings
+                    EMD_categorized_output_fp = EMD_shapeless_category_path + '/' + filename[-16:-4] + '.png'
+                    cv2.imwrite(EMD_categorized_output_fp, img) 
+
                     file_info["hist_categorized"] = True # categorized in shapeless category
                     file_info["EMD_categorized"] = True # categorized in shapeless category
                     file_info["hist_category_num"] = 0 # in shapeless category 
                     file_info["EMD_category_num"] = 0 # in shapeless category
-                    
+
                 images[num_frames] = file_info # save in overall images dictionary
                 num_frames += 1 # increment total number of frames in the folder to categorize
             else:
@@ -359,7 +374,8 @@ def main():
 
 
         # create final shape categories using EMD
-        num_final_categories = 0
+        num_final_categories = 0 
+        num_single_image_categories = 0 # hold the number of categories with only one image in them
 
         for category, image_list in histogram_categories.items():
             for i in range(len(image_list)):
@@ -390,6 +406,8 @@ def main():
 
                     images[img_num]["EMD_categorized"] = True # remember that this image has been categorized
                     images[img_num]["EMD_category_num"] = num_final_categories # remember the category this image is a part of
+
+                    num_category_images = 1 # keep track of the number of images in this category, one image in this category so far
             
                     for j in range(i, len(image_list)): 
                         # read in uncategorized image file
@@ -419,11 +437,18 @@ def main():
                                 images[uncategorized_img_num]["EMD_categorized"] = True # remember that this image has been categorized
                                 images[uncategorized_img_num]["EMD_category_num"] = num_final_categories # save the category number the image was categorized in
 
-        info_file.write("\nHistogram category results: \n") # spacer and header for summary info        
-        info_file.write(str(histogram_categories)) 
+                                num_category_images += 1 # increment the number of images in this shape category
+                    
+                    if (num_category_images == 1):
+                        # if this is the only image in the category, copy it into a folder holding all of the images that are categorized alone
+                        copy_uncategorized_output_fp = EMD_uncategorized_category_path + '/' + image[-16:-4] + '.png' # copy of reference image categorized filepath
+                        cv2.imwrite(copy_uncategorized_output_fp, reference_img) 
+                        info_file.write("Single image category \n") # save the reference image for this shape category in text file
+                        num_single_image_categories += 1 # increment the number of categories with only one image in them
+                    else:
+                        info_file.write("Number of images in this category: " + str(num_category_images) + "\n")
 
-        info_file.write("\nimages: \n") # spacer and header for summary info        
-        info_file.write(str(images))
+        info_file.write("\nnum_single_image_categories: " + str(num_single_image_categories) + "\n") # spacer and header for the number of categories with only one image in them   
     
     end_time = datetime.datetime.now() # get program end time to compute program total runtime
     run_time = end_time - start_time # compute program total runtime
