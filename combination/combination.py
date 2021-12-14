@@ -409,7 +409,7 @@ def main():
 
                     num_category_images = 1 # keep track of the number of images in this category, one image in this category so far
             
-                    for j in range(i, len(image_list)): 
+                    for j in range(i, len(image_list)):  
                         # read in uncategorized image file
                         uncategorized_img_fp = image_list[j] # uncategorized image filepath
                         uncategorized_digits = uncategorized_img_fp[-10:-4] # get the 6 digits in the filename
