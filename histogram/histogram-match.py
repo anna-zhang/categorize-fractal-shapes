@@ -20,6 +20,28 @@ def same_shape(reference_hist, uncategorized_hist, histogram_cutoff, comparison_
     else:
         return MatchInfo(True, match_score) # since the histograms of the two images are around the same, say that they're the same shape
 
+
+# computes ratio of white pixels to total pixels, if less than a threshold value, then considers the image shapeless
+# returns False if the ratio of white pixels:total pixels is lower than the threshold value, True otherwise
+def shape_exists(img, white_threshold): 
+    img = img / 255.0
+
+    num_white_pixels = 0 # number of white pixels in the image
+    height, width = img.shape
+    total_pixels = height * width # total number of pixels in the image
+
+    for y in range(height):
+        for x in range(width):
+            if img[y][x] == 1.0:
+                num_white_pixels += 1
+
+    white_ratio = float(num_white_pixels) / float(total_pixels) # get ratio of white pixels to all pixels in the image
+    if (white_ratio < white_threshold):
+        return False
+    else:
+        return True
+
+
 def main():
     # Read in command line arguments
     num_args = len(sys.argv)
@@ -35,8 +57,9 @@ def main():
     # -one finds all images that have the same shape as the reference image
     program_mode = sys.argv[1] # the program mode: either -all or -specific
     folder_name = sys.argv[2] # the name of the folder within the program's directory in which all images to categorize are stored
-    histogram_cutoff = 0.99999 # histogram difference cutoff
+    histogram_cutoff = 0.9997 # histogram difference cutoff
     comparison_method = cv2.HISTCMP_CORREL # histogram comparison method
+    white_threshold = 0.005 # white pixel:total pixel ratio cutoff for shapeless images
 
     output_path = r'output' # output folder path
     if not os.path.exists(output_path):
@@ -47,8 +70,9 @@ def main():
     info_file.write("Running: ")
     for i in range(num_args):
         info_file.write(sys.argv[i] + " ")
-    info_file.write("\nhistogram_cutoff: " + str(histogram_cutoff) + "\n") # remember the histogram_cutoff threshold value
-    info_file.write("\ncomparison_method: " + str(comparison_method) + "\n") # remember the comparison method for cv2.compareHist()
+    info_file.write("\nwhite_threshold: " + str(white_threshold) + "\n") # remember the white_threshold value
+    info_file.write("histogram_cutoff: " + str(histogram_cutoff) + "\n") # remember the histogram_cutoff threshold value
+    info_file.write("comparison_method: cv2.HISTCMP_CORREL\n") # remember the comparison method for cv2.compareHist()
 
     if program_mode == "-specific": # compare two specific images
         # Program usage: python3 histogram-match.py -specific (image folder name) (image 1 number) (image 2 number) (x-resolution) (y-resolution)
@@ -173,6 +197,19 @@ def main():
                 file_info["categorized"] = False # initialize "categorized" to false
                 file_info["category_num"] = -1 # initialize to -1 when uncategorized
                 file_info["histogram"] =  cv2.calcHist([img], [0], None, [256], [0, 256]) # compute the image histogram
+
+                # remove images with super few white pixels from categorization consideration and place them all in category.000
+                if (shape_exists(img, white_threshold) == False):
+                    # copy shapeless image into shapeless category
+                    new_category_path = r'output/category.' + '{:0>3}'.format(0) # output category folder path
+                    if not os.path.exists(new_category_path):
+                        os.makedirs(new_category_path)
+                
+                    shapeless_categorized_output_fp = new_category_path + '/' + filename[-16:-4] + '.png'
+                    cv2.imwrite(shapeless_categorized_output_fp, img) 
+
+                    file_info["categorized"] = True # categorized in shapeless category
+                    file_info["category_num"] = 0 # in shapeless category 
                     
                 images[num_frames] = file_info # save in overall images dictionary
                 num_frames += 1 # increment total number of frames in the folder to categorize
@@ -204,25 +241,26 @@ def main():
                 images[i]["category_num"] = num_categories # remember the category this image is a part of
         
                 for j in range(i, num_frames): 
-                    # read in uncategorized image file
-                    uncategorized_img_fp = folder_name + '/' + images[j]["filename"] # uncategorized image filepath
-                    assert os.path.isfile(uncategorized_img_fp), 'file \'{0}\' does not exist'.format(uncategorized_img_fp) # make sure the uncategorized image exists at the filepath specified
-                    uncategorized_img = cv2.resize(cv2.imread(uncategorized_img_fp, cv2.IMREAD_GRAYSCALE), (x_res, y_res)) # read uncategorized image as an array of grayscale values so only getting one value per pixel instead of values for three color channels per pixel
+                    if images[j]["categorized"] == False:
+                        # read in uncategorized image file
+                        uncategorized_img_fp = folder_name + '/' + images[j]["filename"] # uncategorized image filepath
+                        assert os.path.isfile(uncategorized_img_fp), 'file \'{0}\' does not exist'.format(uncategorized_img_fp) # make sure the uncategorized image exists at the filepath specified
+                        uncategorized_img = cv2.resize(cv2.imread(uncategorized_img_fp, cv2.IMREAD_GRAYSCALE), (x_res, y_res)) # read uncategorized image as an array of grayscale values so only getting one value per pixel instead of values for three color channels per pixel
 
-                    shape_match = same_shape(images[i]["histogram"], images[j]["histogram"], histogram_cutoff, comparison_method) # see if the two images have similar histograms
-                    # compare the shapes in the two images
-                    if (shape_match.match):
-                        info_file.write(images[j]["filename"] + ": " + str(shape_match.score) + "\n") # save file number corresponding to the histogram match score
-                        print(str(i) + " & " + str(j) + " match")
-                        # the shapes are the same, so categorize the two images together
-                        # make a copy of the image file
-                        categorized_img_output_fp = new_category_path + '/' + 'frame.{:0>6}'.format(j) + '.png'
-                        cv2.imwrite(categorized_img_output_fp, uncategorized_img) 
+                        shape_match = same_shape(images[i]["histogram"], images[j]["histogram"], histogram_cutoff, comparison_method) # see if the two images have similar histograms
+                        # compare the shapes in the two images
+                        if (shape_match.match):
+                            info_file.write(images[j]["filename"] + ": " + str(shape_match.score) + "\n") # save file number corresponding to the histogram match score
+                            print(str(i) + " & " + str(j) + " match")
+                            # the shapes are the same, so categorize the two images together
+                            # make a copy of the image file
+                            categorized_img_output_fp = new_category_path + '/' + 'frame.{:0>6}'.format(j) + '.png'
+                            cv2.imwrite(categorized_img_output_fp, uncategorized_img) 
 
-                        images[j]["categorized"] = True # remember that this image has been categorized
-                        images[j]["category_num"] = num_categories # save the category number the image was categorized in
-        
-        info_file.write("\n Categorization results: \n") # spacer and header for summary info        
+                            images[j]["categorized"] = True # remember that this image has been categorized
+                            images[j]["category_num"] = num_categories # save the category number the image was categorized in
+            
+            info_file.write("\n Categorization results: \n") # spacer and header for summary info        
         info_file.write(str(images))  
     info_file.close() # close the text file
                 
