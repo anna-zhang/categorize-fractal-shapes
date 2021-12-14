@@ -122,8 +122,8 @@ def main():
     # -one finds all images that have the same shape as the reference image
     program_mode = sys.argv[1] # the program mode: either -all or -specific
     folder_name = sys.argv[2] # the name of the folder within the program's directory in which all images to categorize are stored
-    histogram_cutoff = 0.009 # histogram difference cutoff
-    EMD_cutoff = 1.0 # cutoff for EMD scores; if greater than this score, then the two images have different fractal shapes
+    histogram_cutoff = 0.09 # histogram difference cutoff
+    EMD_cutoff = 1.75 # cutoff for EMD scores; if greater than this score, then the two images have different fractal shapes
 
     if program_mode == "-specific": # compare two specific images
         # Program usage: python3 emd.py -specific (image folder name) (image 1 number) (image 2 number) (x-resolution) (y-resolution)
@@ -211,7 +211,6 @@ def main():
                     # make a copy of the uncategorized image file to put in the shape category folder
                     categorized_img_output_fp = new_category_path + '/' + filename[:-3] + 'png'
                     cv2.imwrite(categorized_img_output_fp, uncategorized_img * 255.0) 
-            
 
     else: # categorize all images
         # Program usage: python3 emd.py -all (image folder name) (x-resolution) (y-resolution)
@@ -314,7 +313,6 @@ def main():
 
                         images[j]["categorized"] = True # remember that this image has been categorized
                         images[j]["category_num"] = num_categories # save the category number the image was categorized in
-
 
 
 if __name__ == "__main__":
